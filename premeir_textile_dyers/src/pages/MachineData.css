@@ -284,6 +284,65 @@
   font-size: 0.9rem;
 }
 
+/* Status Filter */
+.status-filter {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.status-filter .filter-btn {
+  padding: 0.75rem 1.5rem;
+  border: 2px solid #e5e7eb;
+  background: white;
+  color: #64748b;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.status-filter .filter-btn:hover {
+  border-color: #1e3a5f;
+  color: #1e3a5f;
+  background: #f8fafc;
+}
+
+.status-filter .filter-btn.active {
+  background: #1e3a5f;
+  color: white;
+  border-color: #1e3a5f;
+}
+
+/* Edit Machine Button */
+.edit-machine-btn {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f1f5f9;
+  border: 2px solid #e2e8f0;
+  color: #475569;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.edit-machine-btn:hover {
+  background: #1e3a5f;
+  color: white;
+  border-color: #1e3a5f;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(30, 58, 95, 0.2);
+}
+
 @media (max-width: 768px) {
   .machines-grid {
     grid-template-columns: 1fr;

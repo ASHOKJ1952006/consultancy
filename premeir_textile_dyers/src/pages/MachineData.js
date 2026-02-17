@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Clock, Plus, X } from 'lucide-react';
+import { Activity, Clock, Plus, X, Edit2 } from 'lucide-react';
 import { machineAPI } from '../services/api';
 import './MachineData.css';
 
 const MachineData = () => {
   const [showAddJobModal, setShowAddJobModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingMachine, setEditingMachine] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
   const [newlyAddedMachine, setNewlyAddedMachine] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -38,6 +41,11 @@ const MachineData = () => {
       setLoading(false);
     }
   };
+
+  // Filter machines based on status
+  const filteredMachines = statusFilter === 'all'
+    ? machines
+    : machines.filter(m => m.status === statusFilter);
 
   const runningMachines = machines.filter(m => m.status === 'running').length;
   const totalMachines = machines.length;
@@ -121,6 +129,42 @@ const MachineData = () => {
     }
   };
 
+  const handleEditClick = (machine) => {
+    setEditingMachine(machine);
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const updateData = {};
+
+      // Always update status
+      updateData.status = e.target.status.value;
+
+      // If currently running, also update job details
+      if (editingMachine.status === 'running') {
+        updateData.party = e.target.party.value;
+        updateData.color = e.target.color.value;
+        updateData.lotNo = e.target.lotNo.value;
+        updateData.quantity = e.target.quantity.value;
+        updateData.stage = e.target.stage.value;
+        updateData.efficiency = parseInt(e.target.efficiency.value);
+      }
+
+      await machineAPI.update(editingMachine._id, updateData);
+      await fetchMachines();
+
+      alert('Machine updated successfully!');
+      setShowEditModal(false);
+      setEditingMachine(null);
+    } catch (err) {
+      console.error('Error updating machine:', err);
+      alert('Failed to update machine. Please try again.');
+    }
+  };
+
   const availableMachines = machines.filter(m => m.status === 'idle' || m.status === 'maintenance');
 
   if (loading) {
@@ -178,9 +222,37 @@ const MachineData = () => {
         </div>
       </div>
 
+      {/* Status Filter */}
+      <div className="status-filter">
+        <button
+          className={`filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('all')}
+        >
+          All Machines
+        </button>
+        <button
+          className={`filter-btn ${statusFilter === 'running' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('running')}
+        >
+          Running
+        </button>
+        <button
+          className={`filter-btn ${statusFilter === 'idle' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('idle')}
+        >
+          Idle
+        </button>
+        <button
+          className={`filter-btn ${statusFilter === 'maintenance' ? 'active' : ''}`}
+          onClick={() => setStatusFilter('maintenance')}
+        >
+          Maintenance
+        </button>
+      </div>
+
       {/* Machine Cards Grid */}
       <div className="machines-grid">
-        {machines.map((machine) => (
+        {filteredMachines.map((machine) => (
           <div
             key={machine._id}
             className={`machine-card ${machine.status} ${newlyAddedMachine === machine.machineId ? 'newly-added' : ''}`}
@@ -243,6 +315,15 @@ const MachineData = () => {
                 )}
               </div>
             )}
+
+            <button
+              className="edit-machine-btn"
+              onClick={() => handleEditClick(machine)}
+              title="Edit machine"
+            >
+              <Edit2 size={16} />
+              Edit
+            </button>
           </div>
         ))}
       </div>
@@ -374,6 +455,134 @@ const MachineData = () => {
                 </button>
                 <button type="submit" className="btn-submit">
                   Add Job
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Machine Modal */}
+      {showEditModal && editingMachine && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Edit Machine - {editingMachine.machineId}</h2>
+              <button className="close-btn" onClick={() => setShowEditModal(false)}>
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="job-form">
+              <div className="form-grid">
+                {/* Status dropdown - available for all machines */}
+                <div className="form-group">
+                  <label htmlFor="status">Machine Status *</label>
+                  <select
+                    id="status"
+                    name="status"
+                    defaultValue={editingMachine.status}
+                    required
+                  >
+                    <option value="running">Running</option>
+                    <option value="idle">Idle</option>
+                    <option value="maintenance">Maintenance</option>
+                  </select>
+                </div>
+
+                {/* Show job fields only if currently running */}
+                {editingMachine.status === 'running' && (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="party">Party Name *</label>
+                      <input
+                        type="text"
+                        id="party"
+                        name="party"
+                        defaultValue={editingMachine.party}
+                        placeholder="e.g., LUX, Modenik, JG"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="color">Color *</label>
+                      <input
+                        type="text"
+                        id="color"
+                        name="color"
+                        defaultValue={editingMachine.color}
+                        placeholder="e.g., Navy Blue, Olive"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="lotNo">Lot Number *</label>
+                      <input
+                        type="text"
+                        id="lotNo"
+                        name="lotNo"
+                        defaultValue={editingMachine.lotNo}
+                        placeholder="e.g., 2384/2385"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="quantity">Quantity *</label>
+                      <input
+                        type="text"
+                        id="quantity"
+                        name="quantity"
+                        defaultValue={editingMachine.quantity}
+                        placeholder="e.g., 450 kg"
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="stage">Stage *</label>
+                      <select
+                        id="stage"
+                        name="stage"
+                        defaultValue={editingMachine.stage}
+                        required
+                      >
+                        <option value="TD Load">TD Load</option>
+                        <option value="Dyeing">Dyeing</option>
+                        <option value="Soap Run">Soap Run</option>
+                        <option value="Soap Steam">Soap Steam</option>
+                        <option value="Unload">Unload</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="efficiency">Efficiency (%) *</label>
+                      <input
+                        type="number"
+                        id="efficiency"
+                        name="efficiency"
+                        defaultValue={editingMachine.efficiency}
+                        min="0"
+                        max="100"
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-submit">
+                  Save Changes
                 </button>
               </div>
             </form>
