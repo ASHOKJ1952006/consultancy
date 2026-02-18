@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { Plus, Search, Eye, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Plus, Search, Eye, CheckCircle, Clock, XCircle, Edit2 } from 'lucide-react';
 import { inspectionAPI } from '../services/api';
 import './ColorInspection.css';
 
@@ -9,12 +9,19 @@ const ColorInspection = () => {
   const [inspections, setInspections] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const inspectionData = [
-    { name: 'Approved', value: 10, color: '#10b981' },
-    { name: 'Pending', value: 2, color: '#fbbf24' },
-    { name: 'Rejected', value: 3, color: '#ef4444' }
-  ];
+  const [showModal, setShowModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    color: '',
+    client: '',
+    lotNo: '',
+    deltaE: '',
+    status: 'pending',
+    notes: ''
+  });
 
   // Fetch inspections on component mount
   useEffect(() => {
@@ -35,9 +42,90 @@ const ColorInspection = () => {
     }
   };
 
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const submitData = {
+        ...formData,
+        deltaE: formData.deltaE ? parseFloat(formData.deltaE) : undefined
+      };
+
+      if (isEditing && editingId) {
+        // Update existing inspection
+        await inspectionAPI.update(editingId, submitData);
+      } else {
+        // Create new inspection
+        await inspectionAPI.create(submitData);
+      }
+
+      setShowModal(false);
+      setIsEditing(false);
+      setEditingId(null);
+      setFormData({
+        date: new Date().toISOString().split('T')[0],
+        color: '',
+        client: '',
+        lotNo: '',
+        deltaE: '',
+        status: 'pending',
+        notes: ''
+      });
+      fetchInspections();
+    } catch (err) {
+      console.error('Error saving inspection:', err);
+      alert(`Failed to ${isEditing ? 'update' : 'create'} inspection`);
+    }
+  };
+
+  const handleEdit = (inspection) => {
+    setIsEditing(true);
+    setEditingId(inspection._id);
+    setFormData({
+      date: inspection.date,
+      color: inspection.color,
+      client: inspection.client,
+      lotNo: inspection.lotNo,
+      deltaE: inspection.deltaE || '',
+      status: inspection.status,
+      notes: inspection.notes || ''
+    });
+    setShowModal(true);
+  };
+
+  const handleNewInspection = () => {
+    setIsEditing(false);
+    setEditingId(null);
+    setFormData({
+      date: new Date().toISOString().split('T')[0],
+      color: '',
+      client: '',
+      lotNo: '',
+      deltaE: '',
+      status: 'pending',
+      notes: ''
+    });
+    setShowModal(true);
+  };
+
   const filteredInspections = inspections.filter(item => {
-    if (activeFilter === 'all') return true;
-    return item.status === activeFilter;
+    // Filter by status
+    const statusMatch = activeFilter === 'all' || item.status === activeFilter;
+
+    // Filter by search query
+    const searchMatch = !searchQuery ||
+      item.color.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.lotNo.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return statusMatch && searchMatch;
   });
 
   const getStatusIcon = (status) => {
@@ -78,9 +166,20 @@ const ColorInspection = () => {
   }
 
   const totalInspections = inspections.length;
-  const approvalRate = Math.round((inspections.filter(i => i.status === 'approved').length / totalInspections) * 100);
-  const avgDeltaE = (inspections.filter(i => i.deltaE).reduce((sum, i) => sum + i.deltaE, 0) / inspections.filter(i => i.deltaE).length).toFixed(2);
-  const pendingReview = inspections.filter(i => i.status === 'pending').length;
+  const approvedCount = inspections.filter(i => i.status === 'approved').length;
+  const pendingCount = inspections.filter(i => i.status === 'pending').length;
+  const rejectedCount = inspections.filter(i => i.status === 'rejected').length;
+  const approvalRate = totalInspections > 0 ? Math.round((approvedCount / totalInspections) * 100) : 0;
+  const withDeltaE = inspections.filter(i => i.deltaE);
+  const avgDeltaE = withDeltaE.length > 0 ? (withDeltaE.reduce((sum, i) => sum + i.deltaE, 0) / withDeltaE.length).toFixed(2) : '0.00';
+  const pendingReview = pendingCount;
+
+  // Dynamic pie chart data
+  const inspectionData = [
+    { name: 'Approved', value: approvedCount, color: '#10b981' },
+    { name: 'Pending', value: pendingCount, color: '#fbbf24' },
+    { name: 'Rejected', value: rejectedCount, color: '#ef4444' }
+  ].filter(item => item.value > 0); // Only show non-zero values
 
   return (
     <div className="color-inspection">
@@ -89,7 +188,7 @@ const ColorInspection = () => {
           <h1>Color Inspection</h1>
           <p className="page-subtitle">Lab dip approvals and quality control tracking</p>
         </div>
-        <button className="new-inspection-button">
+        <button className="new-inspection-button" onClick={handleNewInspection}>
           <Plus size={20} />
           New Inspection
         </button>
@@ -206,7 +305,12 @@ const ColorInspection = () => {
 
             <div className="search-input">
               <Search size={18} />
-              <input type="text" placeholder="Search colors..." />
+              <input
+                type="text"
+                placeholder="Search colors..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
 
@@ -220,6 +324,7 @@ const ColorInspection = () => {
                   <th>Lot No.</th>
                   <th>ΔE</th>
                   <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -251,6 +356,15 @@ const ColorInspection = () => {
                         {getStatusText(item.status)}
                       </span>
                     </td>
+                    <td>
+                      <button
+                        className="edit-button"
+                        onClick={() => handleEdit(item)}
+                        title="Edit inspection"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -258,6 +372,108 @@ const ColorInspection = () => {
           </div>
         </div>
       </div>
+
+      {/* New Inspection Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{isEditing ? 'Edit Inspection' : 'New Inspection'}</h2>
+              <button className="close-button" onClick={() => setShowModal(false)}>×</button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Date *</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={formData.date}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Color *</label>
+                  <input
+                    type="text"
+                    name="color"
+                    value={formData.color}
+                    onChange={handleInputChange}
+                    placeholder="e.g., Navy Blue"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Client *</label>
+                  <input
+                    type="text"
+                    name="client"
+                    value={formData.client}
+                    onChange={handleInputChange}
+                    placeholder="e.g., ABC Textiles"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Lot Number *</label>
+                  <input
+                    type="text"
+                    name="lotNo"
+                    value={formData.lotNo}
+                    onChange={handleInputChange}
+                    placeholder="e.g., LOT-2024-001"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Delta E (ΔE)</label>
+                  <input
+                    type="number"
+                    name="deltaE"
+                    value={formData.deltaE}
+                    onChange={handleInputChange}
+                    placeholder="e.g., 1.2"
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Status *</label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group full-width">
+                <label>Notes</label>
+                <textarea
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleInputChange}
+                  placeholder="Additional notes or observations..."
+                  rows="3"
+                />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="cancel-button" onClick={() => setShowModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="submit-button">
+                  {isEditing ? 'Update Inspection' : 'Create Inspection'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

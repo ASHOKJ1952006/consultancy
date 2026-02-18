@@ -9,6 +9,19 @@ const ProductionSchedule = () => {
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({
+    date: '2025-12-15',
+    time: '08:00',
+    machine: 'SF-01',
+    party: '',
+    color: '',
+    lotNo: '',
+    quantity: '',
+    duration: '',
+    priority: 'medium'
+  });
 
   // Fetch schedules on component mount
   useEffect(() => {
@@ -27,6 +40,92 @@ const ProductionSchedule = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+
+    // Auto-calculate duration when quantity changes
+    if (name === 'quantity' && value) {
+      const qty = parseFloat(value);
+      const hours = Math.ceil((qty / 100) * 2); // 2 hours per 100kg
+      setFormData(prev => ({
+        ...prev,
+        duration: `${hours}h`
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (isEditing && editingId) {
+        await scheduleAPI.update(editingId, formData);
+      } else {
+        await scheduleAPI.create(formData);
+      }
+      setShowAddModal(false);
+      resetForm();
+      fetchSchedules();
+    } catch (err) {
+      console.error('Error saving schedule:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to save schedule';
+      alert(`Failed to save schedule: ${errorMessage}`);
+    }
+  };
+
+  const handleEdit = (schedule) => {
+    setIsEditing(true);
+    setEditingId(schedule._id);
+    setFormData({
+      date: schedule.date,
+      time: schedule.time,
+      machine: schedule.machine,
+      party: schedule.party,
+      color: schedule.color,
+      lotNo: schedule.lotNo,
+      quantity: schedule.quantity,
+      duration: schedule.duration,
+      priority: schedule.priority
+    });
+    setShowAddModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this schedule?')) {
+      try {
+        await scheduleAPI.delete(id);
+        fetchSchedules();
+      } catch (err) {
+        console.error('Error deleting schedule:', err);
+        alert('Failed to delete schedule');
+      }
+    }
+  };
+
+  const handleNewSchedule = () => {
+    resetForm();
+    setShowAddModal(true);
+  };
+
+  const resetForm = () => {
+    setIsEditing(false);
+    setEditingId(null);
+    setFormData({
+      date: selectedDate,
+      time: '08:00',
+      machine: 'SF-01',
+      party: '',
+      color: '',
+      lotNo: '',
+      quantity: '',
+      duration: '',
+      priority: 'medium'
+    });
   };
 
   const scheduledBatches = schedules;
@@ -85,7 +184,7 @@ const ProductionSchedule = () => {
           <h1>Production Schedule</h1>
           <p className="page-subtitle">Plan and manage upcoming production batches</p>
         </div>
-        <button className="schedule-button" onClick={() => setShowAddModal(true)}>
+        <button className="schedule-button" onClick={handleNewSchedule}>
           <Plus size={20} />
           Schedule Batch
         </button>
@@ -119,7 +218,12 @@ const ProductionSchedule = () => {
           </div>
           <div className="stat-info">
             <p className="stat-label">Total Quantity</p>
-            <h3 className="stat-value">2,530 kg</h3>
+            <h3 className="stat-value">
+              {scheduledBatches.reduce((sum, batch) => {
+                const qty = parseFloat(batch.quantity) || 0;
+                return sum + qty;
+              }, 0).toLocaleString()} kg
+            </h3>
           </div>
         </div>
       </div>
@@ -196,10 +300,10 @@ const ProductionSchedule = () => {
                     </td>
                     <td>
                       <div className="action-buttons">
-                        <button className="action-btn edit">
+                        <button className="action-btn edit" onClick={() => handleEdit(batch)} title="Edit schedule">
                           <Edit2 size={16} />
                         </button>
-                        <button className="action-btn delete">
+                        <button className="action-btn delete" onClick={() => handleDelete(batch._id)} title="Delete schedule">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -218,59 +322,131 @@ const ProductionSchedule = () => {
         </div>
       </div>
 
-      {/* Add Modal */}
+      {/* Add/Edit Modal */}
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <h2>Schedule New Batch</h2>
-            <div className="form-grid">
-              <div className="form-group">
-                <label>Date</label>
-                <input type="date" defaultValue="2025-12-15" />
-              </div>
-              <div className="form-group">
-                <label>Time</label>
-                <input type="time" defaultValue="08:00" />
-              </div>
-              <div className="form-group">
-                <label>Machine</label>
-                <select>
-                  <option>SF-01</option>
-                  <option>SF-02</option>
-                  <option>SF-03</option>
-                  <option>SF-04</option>
-                  <option>SF-05</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Party</label>
-                <input type="text" placeholder="Party name" />
-              </div>
-              <div className="form-group">
-                <label>Color</label>
-                <input type="text" placeholder="Color name" />
-              </div>
-              <div className="form-group">
-                <label>Lot No.</label>
-                <input type="text" placeholder="Lot number" />
-              </div>
-              <div className="form-group">
-                <label>Quantity (kg)</label>
-                <input type="number" placeholder="450" />
-              </div>
-              <div className="form-group">
-                <label>Priority</label>
-                <select>
-                  <option>High</option>
-                  <option>Medium</option>
-                  <option>Low</option>
-                </select>
-              </div>
+            <div className="modal-header">
+              <h2>{isEditing ? 'Edit Schedule' : 'Schedule New Batch'}</h2>
+              <button className="close-button" onClick={() => setShowAddModal(false)}>×</button>
             </div>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setShowAddModal(false)}>Cancel</button>
-              <button className="btn-save" onClick={() => setShowAddModal(false)}>Schedule Batch</button>
-            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Date *</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={formData.date}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Time *</label>
+                  <input
+                    type="time"
+                    name="time"
+                    value={formData.time}
+                    onChange={handleInputChange}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Machine *</label>
+                  <select
+                    name="machine"
+                    value={formData.machine}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="SF-01">SF-01</option>
+                    <option value="SF-02">SF-02</option>
+                    <option value="SF-03">SF-03</option>
+                    <option value="SF-04">SF-04</option>
+                    <option value="SF-05">SF-05</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Party *</label>
+                  <input
+                    type="text"
+                    name="party"
+                    value={formData.party}
+                    onChange={handleInputChange}
+                    placeholder="Party name"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Color *</label>
+                  <input
+                    type="text"
+                    name="color"
+                    value={formData.color}
+                    onChange={handleInputChange}
+                    placeholder="Color name"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Lot No. *</label>
+                  <input
+                    type="text"
+                    name="lotNo"
+                    value={formData.lotNo}
+                    onChange={handleInputChange}
+                    placeholder="Lot number"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Quantity (kg) *</label>
+                  <input
+                    type="number"
+                    name="quantity"
+                    value={formData.quantity}
+                    onChange={handleInputChange}
+                    placeholder="450"
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Duration (auto-calculated)</label>
+                  <input
+                    type="text"
+                    name="duration"
+                    value={formData.duration}
+                    onChange={handleInputChange}
+                    placeholder="Will auto-calculate"
+                    readOnly
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Priority *</label>
+                  <select
+                    name="priority"
+                    value={formData.priority}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn-cancel" onClick={() => setShowAddModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-save">
+                  {isEditing ? 'Update Schedule' : 'Schedule Batch'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

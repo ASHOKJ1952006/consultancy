@@ -46,7 +46,7 @@ const inventorySchema = new mongoose.Schema({
 });
 
 // Auto-calculate status and stockLevel before saving
-inventorySchema.pre('save', function (next) {
+inventorySchema.pre('save', async function () {
     this.stockLevel = Math.round((this.stock / this.maxCapacity) * 100);
 
     if (this.stockLevel <= 20) {
@@ -56,8 +56,6 @@ inventorySchema.pre('save', function (next) {
     } else {
         this.status = 'ok';
     }
-
-    next();
 });
 
 module.exports = mongoose.model('Inventory', inventorySchema);

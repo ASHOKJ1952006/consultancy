@@ -9,36 +9,123 @@ const DyesChemicals = () => {
   const [inventory, setInventory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    category: 'Dye',
+    stock: '',
+    minThreshold: 100,
+    maxCapacity: 500,
+    weeklyUsage: {
+      sun: 0,
+      mon: 0,
+      tue: 0,
+      wed: 0,
+      thu: 0,
+      fri: 0
+    }
+  });
 
-  const weeklyUsageData = [
-    { day: 'Sun', dyes: 7200, chemicals: 3800 },
-    { day: 'Mon', dyes: 8900, chemicals: 3400 },
-    { day: 'Tue', dyes: 9300, chemicals: 3200 },
-    { day: 'Wed', dyes: 9100, chemicals: 3400 },
-    { day: 'Thu', dyes: 14200, chemicals: 2800 },
-    { day: 'Fri', dyes: 9200, chemicals: 2900 }
-  ];
+  // Fetch inventory on component mount
+  useEffect(() => {
+    fetchInventory();
+  }, []);
 
-  const inventoryItems = [
-    { name: 'BLACK B (SF) Divine', category: 'Dye', sun: 3930, mon: 3165, tue: 3640, wed: 3415, thu: 3389, fri: 3815, stock: 617, status: 'ok', stockLevel: 100 },
-    { name: 'DEEP BLACK', category: 'Dye', sun: 384, mon: 3184, tue: 3184, wed: 3134, thu: 8134, fri: 3134, stock: 50, status: 'low', stockLevel: 25 },
-    { name: 'RED W3R (Divine)', category: 'Dye', sun: 1205, mon: 1158, tue: 1127, wed: 1101, thu: 1098, fri: 1081, stock: 148, status: 'critical', stockLevel: 69 },
-    { name: 'RED F3B (Divine)', category: 'Dye', sun: 26, mon: 30, tue: 30, wed: 237, thu: 227, fri: 194, stock: 106, status: 'critical', stockLevel: 71 },
-    { name: 'ORANGE W3R (Divine)', category: 'Dye', sun: 1120, mon: 1085, tue: 1035, wed: 1035, thu: 998, fri: 987, stock: 155, status: 'critical', stockLevel: 78 },
-    { name: 'YELLOW ME49L (Divine)', category: 'Dye', sun: 114, mon: 14, tue: 147, wed: 108, thu: 108, fri: 108, stock: 5, status: 'critical', stockLevel: 10 },
-    { name: 'BLUE RR (Divine)', category: 'Dye', sun: 370, mon: 370, tue: 370, wed: 370, thu: 356, fri: 356, stock: 19, status: 'critical', stockLevel: 19 },
-    { name: 'RED RR (Divine)', category: 'Dye', sun: 120, mon: 120, tue: 120, wed: 145, thu: 109, fri: 103, stock: 13, status: 'critical', stockLevel: 13 },
-    { name: 'Wetting Oil - BMW/CFLD', category: 'Chemical', sun: 1613, mon: 1500, tue: 1448, wed: 1389, thu: 1347, fri: 1386, stock: 288, status: 'critical', stockLevel: 72 },
-    { name: 'Soaping Oil - OL 40', category: 'Chemical', sun: 1521, mon: 1428, tue: 1341, wed: 1293, thu: 1259, fri: 1224, stock: 321, status: 'critical', stockLevel: 80 },
-    { name: 'Peroxide Killer Levocol NZCK', category: 'Chemical', sun: 411, mon: 406, tue: 406, wed: 406, thu: 397, fri: 396, stock: 15, status: 'critical', stockLevel: 15 },
-    { name: 'Softner Cakes (1:15)', category: 'Chemical', sun: 125, mon: 100, tue: 100, wed: 100, thu: 75, fri: 75, stock: 75, status: 'critical', stockLevel: 75 }
-  ];
+  const fetchInventory = async () => {
+    try {
+      setLoading(true);
+      const response = await inventoryAPI.getAll();
+      setInventory(response.data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching inventory:', err);
+      setError('Failed to load inventory');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const filteredItems = inventoryItems.filter(item => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'dyes') return item.category === 'Dye';
-    if (activeTab === 'chemicals') return item.category === 'Chemical';
-    return true;
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleWeeklyUsageChange = (day, value) => {
+    setFormData(prev => ({
+      ...prev,
+      weeklyUsage: {
+        ...prev.weeklyUsage,
+        [day]: parseFloat(value) || 0
+      }
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      // Validate stock field
+      if (!formData.stock || formData.stock === '') {
+        alert('Please enter a stock value');
+        return;
+      }
+
+      const stockValue = parseFloat(formData.stock);
+      if (isNaN(stockValue) || stockValue < 0) {
+        alert('Please enter a valid stock value (must be a positive number)');
+        return;
+      }
+
+      const submitData = {
+        ...formData,
+        stock: stockValue,
+        minThreshold: parseFloat(formData.minThreshold) || 100,
+        maxCapacity: parseFloat(formData.maxCapacity) || 500
+      };
+
+      console.log('Submitting data:', submitData); // Debug log
+
+      await inventoryAPI.create(submitData);
+      setShowModal(false);
+      setFormData({
+        name: '',
+        category: 'Dye',
+        stock: '',
+        minThreshold: 100,
+        maxCapacity: 500,
+        weeklyUsage: {
+          sun: 0,
+          mon: 0,
+          tue: 0,
+          wed: 0,
+          thu: 0,
+          fri: 0
+        }
+      });
+      fetchInventory();
+    } catch (err) {
+      console.error('Error creating item:', err);
+      console.error('Error response:', err.response?.data); // Debug log
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to create item';
+      alert(`Failed to create item: ${errorMessage}`);
+    }
+  };
+
+  // Filter items by tab and search
+  const filteredItems = inventory.filter(item => {
+    // Filter by tab
+    const tabMatch = activeTab === 'all' ||
+      (activeTab === 'dyes' && item.category === 'Dye') ||
+      (activeTab === 'chemicals' && item.category === 'Chemical');
+
+    // Filter by search
+    const searchMatch = !searchQuery ||
+      item.name.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return tabMatch && searchMatch;
   });
 
   const getStatusClass = (status) => {
@@ -57,10 +144,43 @@ const DyesChemicals = () => {
     return '';
   };
 
-  const totalItems = inventoryItems.length;
-  const dyesCount = inventoryItems.filter(i => i.category === 'Dye').length;
-  const chemicalsCount = inventoryItems.filter(i => i.category === 'Chemical').length;
-  const lowStockCount = inventoryItems.filter(i => i.status !== 'ok').length;
+  // Calculate dynamic stats
+  const totalItems = inventory.length;
+  const dyesCount = inventory.filter(i => i.category === 'Dye').length;
+  const chemicalsCount = inventory.filter(i => i.category === 'Chemical').length;
+  const lowStockCount = inventory.filter(i => i.status !== 'ok').length;
+
+  // Calculate weekly usage data from inventory
+  const weeklyUsageData = [
+    { day: 'Sun', dyes: 0, chemicals: 0 },
+    { day: 'Mon', dyes: 0, chemicals: 0 },
+    { day: 'Tue', dyes: 0, chemicals: 0 },
+    { day: 'Wed', dyes: 0, chemicals: 0 },
+    { day: 'Thu', dyes: 0, chemicals: 0 },
+    { day: 'Fri', dyes: 0, chemicals: 0 }
+  ];
+
+  inventory.forEach(item => {
+    if (item.weeklyUsage) {
+      const days = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri'];
+      days.forEach((day, index) => {
+        const usage = item.weeklyUsage[day] || 0;
+        if (item.category === 'Dye') {
+          weeklyUsageData[index].dyes += usage;
+        } else {
+          weeklyUsageData[index].chemicals += usage;
+        }
+      });
+    }
+  });
+
+  if (loading) {
+    return <div className="dyes-chemicals"><div className="page-header"><h1>Loading inventory...</h1></div></div>;
+  }
+
+  if (error) {
+    return <div className="dyes-chemicals"><div className="page-header"><h1>Error: {error}</h1></div></div>;
+  }
 
   return (
     <div className="dyes-chemicals">
@@ -69,7 +189,7 @@ const DyesChemicals = () => {
           <h1>Dyes & Chemicals Inventory</h1>
           <p className="page-subtitle">Weekly usage tracking and stock management</p>
         </div>
-        <button className="add-item-button">
+        <button className="add-item-button" onClick={() => setShowModal(true)}>
           <Plus size={20} />
           Add Item
         </button>
@@ -168,7 +288,12 @@ const DyesChemicals = () => {
 
           <div className="search-box">
             <Search size={18} />
-            <input type="text" placeholder="Search items..." />
+            <input
+              type="text"
+              placeholder="Search items..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
           </div>
         </div>
 
@@ -190,19 +315,19 @@ const DyesChemicals = () => {
             </thead>
             <tbody>
               {filteredItems.map((item, index) => (
-                <tr key={index}>
+                <tr key={item._id || index}>
                   <td className="item-name">{item.name}</td>
                   <td>
                     <span className={`category-badge ${item.category.toLowerCase()}`}>
                       {item.category}
                     </span>
                   </td>
-                  <td>{item.sun.toLocaleString()}</td>
-                  <td>{item.mon.toLocaleString()}</td>
-                  <td>{item.tue.toLocaleString()}</td>
-                  <td>{item.wed.toLocaleString()}</td>
-                  <td>{item.thu.toLocaleString()}</td>
-                  <td>{item.fri.toLocaleString()}</td>
+                  <td>{(item.weeklyUsage?.sun || 0).toLocaleString()}</td>
+                  <td>{(item.weeklyUsage?.mon || 0).toLocaleString()}</td>
+                  <td>{(item.weeklyUsage?.tue || 0).toLocaleString()}</td>
+                  <td>{(item.weeklyUsage?.wed || 0).toLocaleString()}</td>
+                  <td>{(item.weeklyUsage?.thu || 0).toLocaleString()}</td>
+                  <td>{(item.weeklyUsage?.fri || 0).toLocaleString()}</td>
                   <td className="stock-cell">
                     <span className={getStatusClass(item.status)}>
                       {item.stock} kg
@@ -219,6 +344,163 @@ const DyesChemicals = () => {
           </table>
         </div>
       </div>
+
+      {/* Add Item Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Add New Item</h2>
+              <button className="close-button" onClick={() => setShowModal(false)}>×</button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Item Name *</label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    placeholder="e.g., BLACK B (SF) Divine"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Category *</label>
+                  <select
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    required
+                  >
+                    <option value="Dye">Dye</option>
+                    <option value="Chemical">Chemical</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Current Stock (kg) *</label>
+                  <input
+                    type="number"
+                    name="stock"
+                    value={formData.stock}
+                    onChange={handleInputChange}
+                    placeholder="e.g., 500"
+                    min="0"
+                    step="0.01"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Min Threshold (kg)</label>
+                  <input
+                    type="number"
+                    name="minThreshold"
+                    value={formData.minThreshold}
+                    onChange={handleInputChange}
+                    placeholder="e.g., 100"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Max Capacity (kg)</label>
+                  <input
+                    type="number"
+                    name="maxCapacity"
+                    value={formData.maxCapacity}
+                    onChange={handleInputChange}
+                    placeholder="e.g., 500"
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+
+              <div className="weekly-usage-section">
+                <h3>Weekly Usage (kg)</h3>
+                <div className="weekly-usage-grid">
+                  <div className="form-group">
+                    <label>Sunday</label>
+                    <input
+                      type="number"
+                      value={formData.weeklyUsage.sun}
+                      onChange={(e) => handleWeeklyUsageChange('sun', e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Monday</label>
+                    <input
+                      type="number"
+                      value={formData.weeklyUsage.mon}
+                      onChange={(e) => handleWeeklyUsageChange('mon', e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Tuesday</label>
+                    <input
+                      type="number"
+                      value={formData.weeklyUsage.tue}
+                      onChange={(e) => handleWeeklyUsageChange('tue', e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Wednesday</label>
+                    <input
+                      type="number"
+                      value={formData.weeklyUsage.wed}
+                      onChange={(e) => handleWeeklyUsageChange('wed', e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Thursday</label>
+                    <input
+                      type="number"
+                      value={formData.weeklyUsage.thu}
+                      onChange={(e) => handleWeeklyUsageChange('thu', e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Friday</label>
+                    <input
+                      type="number"
+                      value={formData.weeklyUsage.fri}
+                      onChange={(e) => handleWeeklyUsageChange('fri', e.target.value)}
+                      placeholder="0"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="cancel-button" onClick={() => setShowModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="submit-button">
+                  Add Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
